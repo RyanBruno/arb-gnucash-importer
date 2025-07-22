@@ -3,5 +3,6 @@ name = "arb-gnucash-importer"
 version = "1.0.0"
 authors = ["Ryan Bruno <ryanbruno506@gmail.com>"]
 edition = "2021"
+license = "MIT"
 
 [dependencies]
