@@ -2,6 +2,8 @@ use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
 
+use arb_gnucash_importer::blockchain::{self, Config};
+
 /// Command line arguments for the backend tool
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -19,10 +21,13 @@ struct Args {
     tags: Option<PathBuf>,
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     // initialize logging from log4rs config file
     log4rs::init_file("log4rs.yml", Default::default()).expect("failed to init logger");
 
     let _args = Args::parse();
+    let cfg = Config::load(None)?;
+    let _provider = blockchain::provider(&cfg).await?;
     Ok(())
 }
