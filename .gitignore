@@ -1,0 +1,19 @@
+# Build artifacts
+/target/
+/debug/
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+
+# IDEs and editors
+.idea/
+.vscode/
+*~
+*.sw?
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
