@@ -5,3 +5,5 @@ authors = ["Ryan Bruno <ryanbruno506@gmail.com>"]
 edition = "2021"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
+log4rs = "1"
