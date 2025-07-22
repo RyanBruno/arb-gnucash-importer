@@ -1,0 +1,30 @@
+# Scan this file for changes every 30 seconds refresh_rate: 30 seconds
+
+appenders:
+  stdout:
+    kind: console
+
+  debug:
+    kind: file
+    path: $ENV{PWD}/log/debug.log
+    encoder:
+      pattern: "{d(%Y-%m-%dT%H:%M:%S %Z)} {h{l}} - {f}:{L} {m}{n}"
+
+root:
+  level: info
+  appenders:
+    - stdout
+    - debug
+
+loggers:
+  # Raise the maximum log level for events sent to the "app::backend::db" logger to "info"
+  app::backend::db:
+    level: info
+
+  # Route log events sent to the "app::requests" logger to the "requests" appender,
+  # and *not* the normal appenders installed at the root
+  #app::requests:
+  #  level: info
+  #  appenders:
+  #    - requests
+  #  additive: false
