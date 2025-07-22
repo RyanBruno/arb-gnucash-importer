@@ -1,6 +1,6 @@
 use clap::Parser;
-use std::path::PathBuf;
 use std::error::Error;
+use std::path::PathBuf;
 
 /// Command line arguments for the backend tool
 #[derive(Parser, Debug)]
