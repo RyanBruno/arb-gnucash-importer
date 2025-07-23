@@ -24,6 +24,20 @@ provided at [examples/config.sample.toml](examples/config.sample.toml) and
 files to `config.toml` or `config.yml` (or another path of your choice) and
 adjust the `rpc_url` value to point at your preferred Arbitrum RPC provider.
 
+## API key
+
+Some API requests require an Arbiscan API key. Register for a free account at
+[arbiscan.io](https://arbiscan.io) and create a new key from the *API Keys*
+section of your profile. Export the key before running the binary:
+
+```bash
+export ETHERSCAN_API_KEY=YOUR_KEY
+cargo run -p arb-gnucash-importer --bin backend
+```
+
+You may also specify `etherscan_api_key` in your configuration file instead of
+using the environment variable.
+
 ## Planned features
 
 - Fetch transactions from the Arbitrum blockchain.
