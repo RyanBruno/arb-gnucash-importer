@@ -30,12 +30,12 @@ impl Config {
             return Ok(Self { rpc_url: url });
         }
 
-        let path = path.unwrap_or("config.toml");
+        let path = path.unwrap_or("config.yml");
         let contents = fs::read_to_string(path)?;
         let ext = Path::new(path)
             .extension()
             .and_then(|e| e.to_str())
-            .unwrap_or("toml");
+            .unwrap_or("yml");
         let cfg = match ext {
             "json" => serde_json::from_str(&contents)?,
             "yaml" | "yml" => serde_yaml::from_str(&contents)?,
