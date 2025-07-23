@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fs::File;
 use std::path::Path;
 
-use crate::blockchain;
+use crate::{blockchain, tokens};
 
 /// A single split in a transaction for GnuCash CSV exports
 #[derive(Debug)]
@@ -69,19 +69,21 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
         }
 
         for tr in &tx.transfers {
-            let decimals = tr.token_decimal.parse::<u32>().unwrap_or(18);
-            let mut amount = value_to_f64(tr.value, decimals);
-            if tr.from == address {
-                amount = -amount;
+            if let Some(sym) = tokens::get_symbol(&tr.token_contract) {
+                let decimals = tr.token_decimal.parse::<u32>().unwrap_or(18);
+                let mut amount = value_to_f64(tr.value, decimals);
+                if tr.from == address {
+                    amount = -amount;
+                }
+                res.push(Split {
+                    date,
+                    description: description.clone(),
+                    account: account.clone(),
+                    commodity: sym.to_string(),
+                    value: amount,
+                    amount,
+                });
             }
-            res.push(Split {
-                date,
-                description: description.clone(),
-                account: account.clone(),
-                commodity: tr.token_symbol.clone(),
-                value: amount,
-                amount,
-            });
         }
     }
     res
@@ -111,11 +113,12 @@ mod tests {
     use super::*;
     use crate::blockchain::{Erc20Transfer, Transaction as ChainTx};
     use ethers::types::{H256, U256};
+    use std::str::FromStr;
 
     #[test]
     fn conversion_sets_fields() {
         let transfer = Erc20Transfer {
-            token_contract: Address::zero(),
+            token_contract: Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8").unwrap(),
             from: Address::repeat_byte(0x11),
             to: Some(Address::repeat_byte(0x22)),
             value: U256::from(5u64),
@@ -139,7 +142,7 @@ mod tests {
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].commodity, "ETH");
         assert!(res[0].value < 0.0);
-        assert_eq!(res[1].commodity, "TST");
+        assert_eq!(res[1].commodity, "USDC");
         assert!(res[1].value < 0.0);
         assert_eq!(res[0].account, "bob");
     }
