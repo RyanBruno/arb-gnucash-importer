@@ -127,6 +127,7 @@ dependencies = [
  "csv",
  "ethers",
  "log4rs",
+ "once_cell",
  "serde",
  "serde_json",
  "serde_yaml",
