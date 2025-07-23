@@ -16,6 +16,13 @@ cargo run -p arb-gnucash-importer --bin backend
 
 The output JSON contains normal transactions along with any ERC-20 token transfers.
 
+## Configuration
+
+RPC endpoint information is read from a small configuration file. An example
+is provided at [examples/config.sample.toml](examples/config.sample.toml).
+Copy this file to `config.toml` (or another path of your choice) and adjust the
+`rpc_url` value to point at your preferred Arbitrum RPC provider.
+
 ## Planned features
 
 - Fetch transactions from the Arbitrum blockchain.
@@ -30,3 +37,4 @@ You can provide a mapping of addresses to service names using the `--tags` optio
 0x1111111111111111111111111111111111111111: Alice
 0x2222222222222222222222222222222222222222: Bob
 ```
+See [examples/tags.sample.toml](examples/tags.sample.toml) for a TOML example.
