@@ -12,6 +12,7 @@ use ethers::{
 };
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::Path;
 
 /// Configuration for connecting to the Arbitrum network.
 #[derive(Debug, Deserialize)]
@@ -50,6 +51,10 @@ pub struct Transaction {
     pub from: Address,
     pub to: Option<Address>,
     pub value: U256,
+    /// Optional tag for the from address
+    pub from_tag: Option<String>,
+    /// Optional tag for the to address
+    pub to_tag: Option<String>,
     /// ERC-20 token transfers associated with this transaction
     pub transfers: Vec<Erc20Transfer>,
 }
@@ -64,6 +69,28 @@ pub struct Erc20Transfer {
     pub token_name: String,
     pub token_symbol: String,
     pub token_decimal: String,
+}
+
+/// Mapping from addresses to service names for tagging transactions
+#[derive(Debug, Deserialize)]
+pub struct Tags(pub HashMap<Address, String>);
+
+impl Tags {
+    /// Load tags from the given file path. The format is inferred from the
+    /// extension and may be TOML, JSON, or YAML.
+    pub fn load(path: &Path) -> Result<Self, Box<dyn Error>> {
+        let contents = fs::read_to_string(path)?;
+        let map: HashMap<Address, String> = match path.extension().and_then(|e| e.to_str()) {
+            Some("json") => serde_json::from_str(&contents)?,
+            Some("toml") => toml::from_str(&contents)?,
+            _ => serde_yaml::from_str(&contents)?,
+        };
+        Ok(Self(map))
+    }
+
+    fn tag_for(&self, addr: &Address) -> Option<String> {
+        self.0.get(addr).cloned()
+    }
 }
 
 fn group_transfers(events: Vec<ERC20TokenTransferEvent>) -> HashMap<H256, Vec<Erc20Transfer>> {
@@ -81,6 +108,17 @@ fn group_transfers(events: Vec<ERC20TokenTransferEvent>) -> HashMap<H256, Vec<Er
         map.entry(ev.hash).or_default().push(transfer);
     }
     map
+}
+
+/// Apply tags to transactions by looking up the from and to addresses in the
+/// provided [`Tags`] mapping.
+pub fn apply_tags(txs: &mut [Transaction], tags: &Tags) {
+    for tx in txs {
+        tx.from_tag = tags.tag_for(&tx.from);
+        if let Some(to) = tx.to {
+            tx.to_tag = tags.tag_for(&to);
+        }
+    }
 }
 
 /// Retrieve all normal transactions for the given address using the Etherscan API.
@@ -118,6 +156,8 @@ pub async fn fetch_transactions(address: Address) -> Result<Vec<Transaction>, Bo
             from,
             to: tx.to,
             value: tx.value,
+            from_tag: None,
+            to_tag: None,
             transfers: transfers.remove(&hash).unwrap_or_default(),
         });
     }
@@ -148,10 +188,37 @@ mod tests {
             from: Address::zero(),
             to: None,
             value: U256::zero(),
+            from_tag: None,
+            to_tag: None,
             transfers: vec![transfer.clone()],
         };
 
         assert_eq!(tx.transfers.len(), 1);
         assert_eq!(tx.transfers[0].token_symbol, transfer.token_symbol);
+    }
+
+    #[test]
+    fn apply_tags_assigns_values() {
+        let mut txs = vec![Transaction {
+            hash: H256::zero(),
+            block_number: 0,
+            timestamp: 0,
+            from: Address::repeat_byte(0x11),
+            to: Some(Address::repeat_byte(0x22)),
+            value: U256::zero(),
+            from_tag: None,
+            to_tag: None,
+            transfers: Vec::new(),
+        }];
+
+        let mut map = HashMap::new();
+        map.insert(Address::repeat_byte(0x11), "alice".to_string());
+        map.insert(Address::repeat_byte(0x22), "bob".to_string());
+        let tags = Tags(map);
+
+        apply_tags(&mut txs, &tags);
+
+        assert_eq!(txs[0].from_tag.as_deref(), Some("alice"));
+        assert_eq!(txs[0].to_tag.as_deref(), Some("bob"));
     }
 }
