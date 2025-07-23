@@ -2,7 +2,7 @@ use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
 
-use arb_gnucash_importer::blockchain::{self, Config};
+use arb_gnucash_importer::blockchain::{self, apply_tags, Config, Tags};
 use ethers::types::Address;
 use std::fs;
 
@@ -33,7 +33,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let _provider = blockchain::provider(&cfg).await?;
 
     let address: Address = args.address.parse()?;
-    let txs = blockchain::fetch_transactions(address).await?;
+    let mut txs = blockchain::fetch_transactions(address).await?;
+    if let Some(tags_path) = args.tags.as_deref() {
+        let tags = Tags::load(tags_path)?;
+        apply_tags(&mut txs, &tags);
+    }
     let json = serde_json::to_string_pretty(&txs)?;
     fs::write(args.output, json)?;
     Ok(())
