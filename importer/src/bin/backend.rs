@@ -3,8 +3,8 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use arb_gnucash_importer::blockchain::{self, apply_tags, Config, Tags};
+use arb_gnucash_importer::export::{self, write_csv};
 use ethers::types::Address;
-use std::fs;
 
 /// Command line arguments for the backend tool
 #[derive(Parser, Debug)]
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let tags = Tags::load(tags_path)?;
         apply_tags(&mut txs, &tags);
     }
-    let json = serde_json::to_string_pretty(&txs)?;
-    fs::write(args.output, json)?;
+    let gnucash_txs = export::from_chain(address, &txs);
+    write_csv(&args.output, &gnucash_txs)?;
     Ok(())
 }
