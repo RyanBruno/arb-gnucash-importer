@@ -3,6 +3,8 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use arb_gnucash_importer::blockchain::{self, Config};
+use ethers::types::Address;
+use std::fs;
 
 /// Command line arguments for the backend tool
 #[derive(Parser, Debug)]
@@ -26,8 +28,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // initialize logging from log4rs config file
     log4rs::init_file("log4rs.yml", Default::default()).expect("failed to init logger");
 
-    let _args = Args::parse();
+    let args = Args::parse();
     let cfg = Config::load(None)?;
     let _provider = blockchain::provider(&cfg).await?;
+
+    let address: Address = args.address.parse()?;
+    let txs = blockchain::fetch_transactions(address).await?;
+    let json = serde_json::to_string_pretty(&txs)?;
+    fs::write(args.output, json)?;
     Ok(())
 }

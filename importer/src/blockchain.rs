@@ -3,11 +3,15 @@ use std::error::Error;
 use std::fs;
 
 use ethers::{
-    etherscan::Client as EtherscanClient,
+    etherscan::{
+        account::{ERC20TokenTransferEvent, TokenQueryOption},
+        Client as EtherscanClient,
+    },
     providers::{Http, Provider},
     types::{Address, Chain, H256, U256},
 };
 use serde::Deserialize;
+use std::collections::HashMap;
 
 /// Configuration for connecting to the Arbitrum network.
 #[derive(Debug, Deserialize)]
@@ -38,7 +42,7 @@ pub async fn provider(cfg: &Config) -> Result<Provider<Http>, Box<dyn Error>> {
 }
 
 /// Simplified transaction information returned by [`fetch_transactions`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct Transaction {
     pub hash: H256,
     pub block_number: u64,
@@ -46,6 +50,37 @@ pub struct Transaction {
     pub from: Address,
     pub to: Option<Address>,
     pub value: U256,
+    /// ERC-20 token transfers associated with this transaction
+    pub transfers: Vec<Erc20Transfer>,
+}
+
+/// Details for a single ERC-20 token transfer
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct Erc20Transfer {
+    pub token_contract: Address,
+    pub from: Address,
+    pub to: Option<Address>,
+    pub value: U256,
+    pub token_name: String,
+    pub token_symbol: String,
+    pub token_decimal: String,
+}
+
+fn group_transfers(events: Vec<ERC20TokenTransferEvent>) -> HashMap<H256, Vec<Erc20Transfer>> {
+    let mut map: HashMap<H256, Vec<Erc20Transfer>> = HashMap::new();
+    for ev in events {
+        let transfer = Erc20Transfer {
+            token_contract: ev.contract_address,
+            from: ev.from,
+            to: ev.to,
+            value: ev.value,
+            token_name: ev.token_name,
+            token_symbol: ev.token_symbol,
+            token_decimal: ev.token_decimal,
+        };
+        map.entry(ev.hash).or_default().push(transfer);
+    }
+    map
 }
 
 /// Retrieve all normal transactions for the given address using the Etherscan API.
@@ -53,6 +88,10 @@ pub async fn fetch_transactions(address: Address) -> Result<Vec<Transaction>, Bo
     // use optional API key from environment if provided
     let client = EtherscanClient::new_from_opt_env(Chain::Arbitrum)?;
     let txs = client.get_transactions(&address, None).await?;
+    let events = client
+        .get_erc20_token_transfer_events(TokenQueryOption::ByAddress(address), None)
+        .await?;
+    let mut transfers = group_transfers(events);
     let mut result = Vec::new();
 
     for tx in txs {
@@ -79,8 +118,40 @@ pub async fn fetch_transactions(address: Address) -> Result<Vec<Transaction>, Bo
             from,
             to: tx.to,
             value: tx.value,
+            transfers: transfers.remove(&hash).unwrap_or_default(),
         });
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transaction_with_transfer() {
+        let transfer = Erc20Transfer {
+            token_contract: Address::zero(),
+            from: Address::zero(),
+            to: Some(Address::zero()),
+            value: U256::from(1u64),
+            token_name: "TEST".to_string(),
+            token_symbol: "TST".to_string(),
+            token_decimal: "18".to_string(),
+        };
+
+        let tx = Transaction {
+            hash: H256::zero(),
+            block_number: 1,
+            timestamp: 0,
+            from: Address::zero(),
+            to: None,
+            value: U256::zero(),
+            transfers: vec![transfer.clone()],
+        };
+
+        assert_eq!(tx.transfers.len(), 1);
+        assert_eq!(tx.transfers[0].token_symbol, transfer.token_symbol);
+    }
 }

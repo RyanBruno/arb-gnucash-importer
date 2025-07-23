@@ -14,8 +14,11 @@ The workspace contains a single crate with a binary called `backend`. You can ru
 cargo run -p arb-gnucash-importer --bin backend
 ```
 
+The output JSON contains normal transactions along with any ERC-20 token transfers.
+
 ## Planned features
 
 - Fetch transactions from the Arbitrum blockchain.
 - Export retrieved data into a format that can be imported by GnuCash.
+- Track ERC-20 token transfers associated with each transaction.
 
