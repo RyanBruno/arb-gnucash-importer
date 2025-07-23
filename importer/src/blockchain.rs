@@ -22,16 +22,25 @@ pub struct Config {
 
 impl Config {
     /// Load configuration from the `ARBITRUM_RPC_URL` environment variable or
-    /// from the given YAML file path. If `path` is `None`, `config.yml` will be
-    /// attempted.
+    /// from the provided config file. The file format is inferred from the
+    /// extension and may be TOML, YAML or JSON. If `path` is `None`,
+    /// `config.toml` will be attempted.
     pub fn load(path: Option<&str>) -> Result<Self, Box<dyn Error>> {
         if let Ok(url) = env::var("ARBITRUM_RPC_URL") {
             return Ok(Self { rpc_url: url });
         }
 
-        let path = path.unwrap_or("config.yml");
+        let path = path.unwrap_or("config.toml");
         let contents = fs::read_to_string(path)?;
-        let cfg: Self = serde_yaml::from_str(&contents)?;
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("toml");
+        let cfg = match ext {
+            "json" => serde_json::from_str(&contents)?,
+            "yaml" | "yml" => serde_yaml::from_str(&contents)?,
+            _ => toml::from_str(&contents)?,
+        };
         Ok(cfg)
     }
 }
@@ -220,5 +229,12 @@ mod tests {
 
         assert_eq!(txs[0].from_tag.as_deref(), Some("alice"));
         assert_eq!(txs[0].to_tag.as_deref(), Some("bob"));
+    }
+
+    #[test]
+    fn config_loads_toml_and_yaml() {
+        let toml_cfg = Config::load(Some("../examples/config.sample.toml")).expect("load toml");
+        let yaml_cfg = Config::load(Some("../examples/config.sample.yml")).expect("load yaml");
+        assert_eq!(toml_cfg.rpc_url, yaml_cfg.rpc_url);
     }
 }

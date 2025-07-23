@@ -18,10 +18,11 @@ The output JSON contains normal transactions along with any ERC-20 token transfe
 
 ## Configuration
 
-RPC endpoint information is read from a small configuration file. An example
-is provided at [examples/config.sample.toml](examples/config.sample.toml).
-Copy this file to `config.toml` (or another path of your choice) and adjust the
-`rpc_url` value to point at your preferred Arbitrum RPC provider.
+RPC endpoint information is read from a small configuration file. Examples are
+provided at [examples/config.sample.toml](examples/config.sample.toml) and
+[examples/config.sample.yml](examples/config.sample.yml). Copy one of these
+files to `config.toml` or `config.yml` (or another path of your choice) and
+adjust the `rpc_url` value to point at your preferred Arbitrum RPC provider.
 
 ## Planned features
 
