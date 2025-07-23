@@ -31,9 +31,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let cfg = Config::load(None)?;
     let _provider = blockchain::provider(&cfg).await?;
+    let client = blockchain::etherscan_client(&cfg)?;
 
     let address: Address = args.address.parse()?;
-    let mut txs = blockchain::fetch_transactions(address).await?;
+    let mut txs = blockchain::fetch_transactions(&client, address).await?;
     if let Some(tags_path) = args.tags.as_deref() {
         let tags = Tags::load(tags_path)?;
         apply_tags(&mut txs, &tags);

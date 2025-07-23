@@ -42,6 +42,11 @@ pub async fn provider(cfg: &Config) -> Result<Provider<Http>, Box<dyn Error>> {
     Ok(provider)
 }
 
+/// Create an [`EtherscanClient`] for the Arbitrum network using an optional API key.
+pub fn etherscan_client(_cfg: &Config) -> Result<EtherscanClient, Box<dyn Error>> {
+    Ok(EtherscanClient::new_from_opt_env(Chain::Arbitrum)?)
+}
+
 /// Simplified transaction information returned by [`fetch_transactions`].
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Transaction {
@@ -121,10 +126,11 @@ pub fn apply_tags(txs: &mut [Transaction], tags: &Tags) {
     }
 }
 
-/// Retrieve all normal transactions for the given address using the Etherscan API.
-pub async fn fetch_transactions(address: Address) -> Result<Vec<Transaction>, Box<dyn Error>> {
-    // use optional API key from environment if provided
-    let client = EtherscanClient::new_from_opt_env(Chain::Arbitrum)?;
+/// Retrieve all normal transactions for the given address using the provided [`EtherscanClient`].
+pub async fn fetch_transactions(
+    client: &EtherscanClient,
+    address: Address,
+) -> Result<Vec<Transaction>, Box<dyn Error>> {
     let txs = client.get_transactions(&address, None).await?;
     let events = client
         .get_erc20_token_transfer_events(TokenQueryOption::ByAddress(address), None)
@@ -168,6 +174,8 @@ pub async fn fetch_transactions(address: Address) -> Result<Vec<Transaction>, Bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use ethers::etherscan::Client as EtherscanClient;
 
     #[test]
     fn transaction_with_transfer() {
@@ -220,5 +228,17 @@ mod tests {
 
         assert_eq!(txs[0].from_tag.as_deref(), Some("alice"));
         assert_eq!(txs[0].to_tag.as_deref(), Some("bob"));
+    }
+
+    #[tokio::test]
+    async fn fetch_transactions_uses_client() {
+        let client = EtherscanClient::builder()
+            .chain(Chain::Arbitrum).unwrap()
+            .with_api_url("http://127.0.0.1:0/api").unwrap()
+            .with_url("http://127.0.0.1:0").unwrap()
+            .build().unwrap();
+
+        let res = fetch_transactions(&client, Address::zero()).await;
+        assert!(res.is_err());
     }
 }
