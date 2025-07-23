@@ -18,6 +18,8 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub rpc_url: String,
+    #[serde(default)]
+    pub etherscan_api_key: Option<String>,
 }
 
 impl Config {
@@ -27,7 +29,10 @@ impl Config {
     /// `config.toml` will be attempted.
     pub fn load(path: Option<&str>) -> Result<Self, Box<dyn Error>> {
         if let Ok(url) = env::var("ARBITRUM_RPC_URL") {
-            return Ok(Self { rpc_url: url });
+            return Ok(Self {
+                rpc_url: url,
+                etherscan_api_key: env::var("ETHERSCAN_API_KEY").ok(),
+            });
         }
 
         let path = path.unwrap_or("config.toml");
@@ -52,8 +57,12 @@ pub async fn provider(cfg: &Config) -> Result<Provider<Http>, Box<dyn Error>> {
 }
 
 /// Create an [`EtherscanClient`] for the Arbitrum network using an optional API key.
-pub fn etherscan_client(_cfg: &Config) -> Result<EtherscanClient, Box<dyn Error>> {
-    Ok(EtherscanClient::new_from_opt_env(Chain::Arbitrum)?)
+pub fn etherscan_client(cfg: &Config) -> Result<EtherscanClient, Box<dyn Error>> {
+    if let Some(ref key) = cfg.etherscan_api_key {
+        Ok(EtherscanClient::new(Chain::Arbitrum, key)?)
+    } else {
+        Ok(EtherscanClient::new_from_opt_env(Chain::Arbitrum)?)
+    }
 }
 
 /// Simplified transaction information returned by [`fetch_transactions`].
@@ -242,10 +251,14 @@ mod tests {
     #[tokio::test]
     async fn fetch_transactions_uses_client() {
         let client = EtherscanClient::builder()
-            .chain(Chain::Arbitrum).unwrap()
-            .with_api_url("http://127.0.0.1:0/api").unwrap()
-            .with_url("http://127.0.0.1:0").unwrap()
-            .build().unwrap();
+            .chain(Chain::Arbitrum)
+            .unwrap()
+            .with_api_url("http://127.0.0.1:0/api")
+            .unwrap()
+            .with_url("http://127.0.0.1:0")
+            .unwrap()
+            .build()
+            .unwrap();
 
         let res = fetch_transactions(&client, Address::zero()).await;
         assert!(res.is_err());

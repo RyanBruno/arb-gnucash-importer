@@ -1,2 +1,4 @@
 # RPC URL for connecting to the Arbitrum network
 rpc_url = "https://arb1.arbitrum.io/rpc"
+# Optional API key for Etherscan queries
+# etherscan_api_key = "YOUR_KEY"
