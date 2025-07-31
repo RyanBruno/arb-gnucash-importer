@@ -2,7 +2,7 @@ use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
 
-use arb_gnucash_importer::blockchain::{self, apply_tags, Config, Tags};
+use arb_gnucash_importer::blockchain::{self, apply_categories, Categories, Config};
 use arb_gnucash_importer::export::{self, write_csv};
 use ethers::types::Address;
 
@@ -18,9 +18,9 @@ struct Args {
     #[arg(long)]
     output: PathBuf,
 
-    /// Optional config file for tagged addresses
+    /// Optional config file mapping addresses to transaction categories
     #[arg(long)]
-    tags: Option<PathBuf>,
+    categories: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -35,9 +35,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let address: Address = args.address.parse()?;
     let mut txs = blockchain::fetch_transactions(&client, address).await?;
-    if let Some(tags_path) = args.tags.as_deref() {
-        let tags = Tags::load(tags_path)?;
-        apply_tags(&mut txs, &tags);
+    if let Some(cat_path) = args.categories.as_deref() {
+        let cats = Categories::load(cat_path)?;
+        apply_categories(&mut txs, &cats);
     }
     let gnucash_txs = export::from_chain(address, &txs);
     write_csv(&args.output, &gnucash_txs)?;

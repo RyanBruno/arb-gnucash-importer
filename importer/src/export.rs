@@ -35,23 +35,13 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
         let date = dt.date();
         let eth_amount = value_to_f64(tx.value, 18);
 
-        let (description, account) = if tx.to == Some(address) {
-            let desc = tx
-                .from_tag
-                .as_deref()
-                .map(|t| format!("from {t}"))
-                .unwrap_or_else(|| "deposit".to_string());
-            let acc = tx.from_tag.clone().unwrap_or_else(|| "Unknown".to_string());
-            (desc, acc)
+        let default_desc = if tx.to == Some(address) {
+            "deposit".to_string()
         } else {
-            let desc = tx
-                .to_tag
-                .as_deref()
-                .map(|t| format!("to {t}"))
-                .unwrap_or_else(|| "withdrawal".to_string());
-            let acc = tx.to_tag.clone().unwrap_or_else(|| "Unknown".to_string());
-            (desc, acc)
+            "withdrawal".to_string()
         };
+        let description = tx.category.clone().unwrap_or_else(|| default_desc.clone());
+        let account = tx.category.clone().unwrap_or_else(|| "Unknown".to_string());
 
         if eth_amount != 0.0 {
             let mut amount = eth_amount;
@@ -93,7 +83,14 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
 pub fn write_csv(path: &Path, txs: &[Split]) -> Result<(), Box<dyn Error>> {
     let file = File::create(path)?;
     let mut wtr = Writer::from_writer(file);
-    wtr.write_record(["Date", "Description", "Account", "Commodity", "Value", "Amount"])?;
+    wtr.write_record([
+        "Date",
+        "Description",
+        "Account",
+        "Commodity",
+        "Value",
+        "Amount",
+    ])?;
     for tx in txs {
         wtr.write_record([
             tx.date.to_string(),
@@ -118,7 +115,8 @@ mod tests {
     #[test]
     fn conversion_sets_fields() {
         let transfer = Erc20Transfer {
-            token_contract: Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8").unwrap(),
+            token_contract: Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8")
+                .unwrap(),
             from: Address::repeat_byte(0x11),
             to: Some(Address::repeat_byte(0x22)),
             value: U256::from(5u64),
@@ -134,8 +132,7 @@ mod tests {
             from: Address::repeat_byte(0x11),
             to: Some(Address::repeat_byte(0x22)),
             value: U256::from(10u64.pow(18)),
-            from_tag: Some("alice".to_string()),
-            to_tag: Some("bob".to_string()),
+            category: Some("Trade".to_string()),
             transfers: vec![transfer],
         };
         let res = from_chain(Address::repeat_byte(0x11), &[chain_tx]);
@@ -144,6 +141,6 @@ mod tests {
         assert!(res[0].value < 0.0);
         assert_eq!(res[1].commodity, "USDC");
         assert!(res[1].value < 0.0);
-        assert_eq!(res[0].account, "bob");
+        assert_eq!(res[0].account, "Trade");
     }
 }
