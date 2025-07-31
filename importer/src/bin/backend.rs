@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use arb_gnucash_importer::blockchain::{self, apply_tags, Config, Tags};
 use arb_gnucash_importer::export::{self, write_csv};
-use arb_gnucash_importer::price;
 use ethers::types::Address;
 
 /// Command line arguments for the backend tool
@@ -40,9 +39,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let tags = Tags::load(tags_path)?;
         apply_tags(&mut txs, &tags);
     }
-    let mut cache = price::Cache::load("price-cache.json", cfg.etherscan_api_key.clone());
-    let gnucash_txs = export::from_chain(address, &txs, &mut cache).await?;
-    cache.save();
+    let gnucash_txs = export::from_chain(address, &txs);
     write_csv(&args.output, &gnucash_txs)?;
     Ok(())
 }

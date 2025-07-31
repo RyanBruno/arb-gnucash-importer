@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fs::File;
 use std::path::Path;
 
-use crate::{blockchain, price, tokens};
+use crate::{blockchain, tokens};
 
 /// A single split in a transaction for GnuCash CSV exports
 #[derive(Debug)]
@@ -27,11 +27,7 @@ fn value_to_f64(value: ethers::types::U256, decimals: u32) -> f64 {
 }
 
 /// Convert blockchain transactions into GnuCash CSV transactions
-pub async fn from_chain(
-    address: Address,
-    txs: &[blockchain::Transaction],
-    cache: &mut price::Cache,
-) -> Result<Vec<Split>, Box<dyn Error>> {
+pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Split> {
     let mut res = Vec::new();
     for tx in txs {
         let dt = NaiveDateTime::from_timestamp_opt(tx.timestamp as i64, 0)
@@ -62,13 +58,12 @@ pub async fn from_chain(
             if tx.from == address {
                 amount = -amount;
             }
-            let price = cache.price(None, date).await?;
             res.push(Split {
                 date,
                 description: description.clone(),
                 account: account.clone(),
                 commodity: "ETH".to_string(),
-                value: amount * price,
+                value: amount,
                 amount,
             });
         }
@@ -80,33 +75,25 @@ pub async fn from_chain(
                 if tr.from == address {
                     amount = -amount;
                 }
-                let price = cache.price(Some(tr.token_contract), date).await?;
                 res.push(Split {
                     date,
                     description: description.clone(),
                     account: account.clone(),
                     commodity: sym.to_string(),
-                    value: amount * price,
+                    value: amount,
                     amount,
                 });
             }
         }
     }
-    Ok(res)
+    res
 }
 
 /// Write the provided transactions to `path` in CSV format compatible with GnuCash
 pub fn write_csv(path: &Path, txs: &[Split]) -> Result<(), Box<dyn Error>> {
     let file = File::create(path)?;
     let mut wtr = Writer::from_writer(file);
-    wtr.write_record([
-        "Date",
-        "Description",
-        "Account",
-        "Commodity",
-        "Value",
-        "Amount",
-    ])?;
+    wtr.write_record(["Date", "Description", "Account", "Commodity", "Value", "Amount"])?;
     for tx in txs {
         wtr.write_record([
             tx.date.to_string(),
@@ -124,19 +111,14 @@ pub fn write_csv(path: &Path, txs: &[Split]) -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        blockchain::{Erc20Transfer, Transaction as ChainTx},
-        price,
-    };
-    use chrono::NaiveDate;
-    use ethers::types::{Address, H256, U256};
+    use crate::blockchain::{Erc20Transfer, Transaction as ChainTx};
+    use ethers::types::{H256, U256};
     use std::str::FromStr;
 
-    #[tokio::test]
-    async fn conversion_sets_fields() {
+    #[test]
+    fn conversion_sets_fields() {
         let transfer = Erc20Transfer {
-            token_contract: Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8")
-                .unwrap(),
+            token_contract: Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8").unwrap(),
             from: Address::repeat_byte(0x11),
             to: Some(Address::repeat_byte(0x22)),
             value: U256::from(5u64),
@@ -156,16 +138,7 @@ mod tests {
             to_tag: Some("bob".to_string()),
             transfers: vec![transfer],
         };
-        let mut cache = price::Cache::new(None);
-        cache.insert_price(None, NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(), 1.0);
-        cache.insert_price(
-            Some(Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8").unwrap()),
-            NaiveDate::from_ymd_opt(1970, 1, 1).unwrap(),
-            1.0,
-        );
-        let res = from_chain(Address::repeat_byte(0x11), &[chain_tx], &mut cache)
-            .await
-            .unwrap();
+        let res = from_chain(Address::repeat_byte(0x11), &[chain_tx]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].commodity, "ETH");
         assert!(res[0].value < 0.0);
