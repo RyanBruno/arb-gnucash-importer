@@ -15,7 +15,6 @@ pub struct Split {
     pub description: String,
     pub account: String,
     pub commodity: String,
-    pub value: f64,
     pub amount: f64,
 }
 
@@ -53,7 +52,6 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
                 description: description.clone(),
                 account: account.clone(),
                 commodity: "ETH".to_string(),
-                value: amount,
                 amount,
             });
         }
@@ -70,7 +68,6 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
                     description: description.clone(),
                     account: account.clone(),
                     commodity: sym.to_string(),
-                    value: amount,
                     amount,
                 });
             }
@@ -97,7 +94,6 @@ pub fn write_csv(path: &Path, txs: &[Split]) -> Result<(), Box<dyn Error>> {
             tx.description.clone(),
             tx.account.clone(),
             tx.commodity.clone(),
-            tx.value.to_string(),
             tx.amount.to_string(),
         ])?;
     }
