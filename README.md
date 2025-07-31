@@ -44,12 +44,12 @@ using the environment variable.
 - Export retrieved data into a format that can be imported by GnuCash.
 - Track ERC-20 token transfers associated with each transaction.
 
-## Address tags
+## Transaction categories
 
-You can provide a mapping of addresses to service names using the `--tags` option. The file may be TOML, JSON or YAML. Example `tags.yml`:
+You can provide a mapping of addresses to transaction categories using the `--categories` option. The file may be TOML, JSON or YAML. Example `categories.yml`:
 
 ```yaml
-0x1111111111111111111111111111111111111111: Alice
-0x2222222222222222222222222222222222222222: Bob
+0x1111111111111111111111111111111111111111: Deposit
+0x2222222222222222222222222222222222222222: Withdrawal
 ```
-See [examples/tags.sample.toml](examples/tags.sample.toml) for a TOML example.
+See [examples/categories.sample.toml](examples/categories.sample.toml) for a TOML example.

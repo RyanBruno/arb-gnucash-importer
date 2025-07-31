@@ -74,10 +74,8 @@ pub struct Transaction {
     pub from: Address,
     pub to: Option<Address>,
     pub value: U256,
-    /// Optional tag for the from address
-    pub from_tag: Option<String>,
-    /// Optional tag for the to address
-    pub to_tag: Option<String>,
+    /// Optional category for the transaction
+    pub category: Option<String>,
     /// ERC-20 token transfers associated with this transaction
     pub transfers: Vec<Erc20Transfer>,
 }
@@ -94,12 +92,12 @@ pub struct Erc20Transfer {
     pub token_decimal: String,
 }
 
-/// Mapping from addresses to service names for tagging transactions
+/// Mapping from addresses to transaction categories
 #[derive(Debug, Deserialize)]
-pub struct Tags(pub HashMap<Address, String>);
+pub struct Categories(pub HashMap<Address, String>);
 
-impl Tags {
-    /// Load tags from the given file path. The format is inferred from the
+impl Categories {
+    /// Load categories from the given file path. The format is inferred from the
     /// extension and may be TOML, JSON, or YAML.
     pub fn load(path: &Path) -> Result<Self, Box<dyn Error>> {
         let contents = fs::read_to_string(path)?;
@@ -111,7 +109,7 @@ impl Tags {
         Ok(Self(map))
     }
 
-    fn tag_for(&self, addr: &Address) -> Option<String> {
+    fn category_for(&self, addr: &Address) -> Option<String> {
         self.0.get(addr).cloned()
     }
 }
@@ -133,14 +131,17 @@ fn group_transfers(events: Vec<ERC20TokenTransferEvent>) -> HashMap<H256, Vec<Er
     map
 }
 
-/// Apply tags to transactions by looking up the from and to addresses in the
-/// provided [`Tags`] mapping.
-pub fn apply_tags(txs: &mut [Transaction], tags: &Tags) {
+/// Assign categories to transactions by looking up the from and to addresses in the
+/// provided [`Categories`] mapping.
+pub fn apply_categories(txs: &mut [Transaction], categories: &Categories) {
     for tx in txs {
-        tx.from_tag = tags.tag_for(&tx.from);
         if let Some(to) = tx.to {
-            tx.to_tag = tags.tag_for(&to);
+            if let Some(cat) = categories.category_for(&to) {
+                tx.category = Some(cat);
+                continue;
+            }
         }
+        tx.category = categories.category_for(&tx.from);
     }
 }
 
@@ -180,8 +181,7 @@ pub async fn fetch_transactions(
             from,
             to: tx.to,
             value: tx.value,
-            from_tag: None,
-            to_tag: None,
+            category: None,
             transfers: transfers.remove(&hash).unwrap_or_default(),
         });
     }
@@ -214,8 +214,7 @@ mod tests {
             from: Address::zero(),
             to: None,
             value: U256::zero(),
-            from_tag: None,
-            to_tag: None,
+            category: None,
             transfers: vec![transfer.clone()],
         };
 
@@ -224,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_tags_assigns_values() {
+    fn apply_categories_assigns_values() {
         let mut txs = vec![Transaction {
             hash: H256::zero(),
             block_number: 0,
@@ -232,20 +231,18 @@ mod tests {
             from: Address::repeat_byte(0x11),
             to: Some(Address::repeat_byte(0x22)),
             value: U256::zero(),
-            from_tag: None,
-            to_tag: None,
+            category: None,
             transfers: Vec::new(),
         }];
 
         let mut map = HashMap::new();
-        map.insert(Address::repeat_byte(0x11), "alice".to_string());
-        map.insert(Address::repeat_byte(0x22), "bob".to_string());
-        let tags = Tags(map);
+        map.insert(Address::repeat_byte(0x11), "Deposit".to_string());
+        map.insert(Address::repeat_byte(0x22), "Withdrawal".to_string());
+        let cats = Categories(map);
 
-        apply_tags(&mut txs, &tags);
+        apply_categories(&mut txs, &cats);
 
-        assert_eq!(txs[0].from_tag.as_deref(), Some("alice"));
-        assert_eq!(txs[0].to_tag.as_deref(), Some("bob"));
+        assert_eq!(txs[0].category.as_deref(), Some("Withdrawal"));
     }
 
     #[tokio::test]
