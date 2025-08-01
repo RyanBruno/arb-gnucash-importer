@@ -2,9 +2,10 @@ use std::env;
 use std::error::Error;
 use std::fs;
 
+use async_trait::async_trait;
 use ethers::{
     etherscan::{
-        account::{ERC20TokenTransferEvent, TokenQueryOption},
+        account::{ERC20TokenTransferEvent, NormalTransaction, TokenQueryOption, TxListParams},
         Client as EtherscanClient,
     },
     providers::{Http, Provider},
@@ -186,16 +187,84 @@ pub fn apply_categories(txs: &mut [Transaction], categories: &Categories) {
     }
 }
 
+/// Trait abstracting the subset of [`EtherscanClient`] functionality used by
+/// [`fetch_transactions`].
+#[async_trait]
+pub trait TxSource {
+    async fn get_transactions(
+        &self,
+        address: &Address,
+        params: Option<TxListParams>,
+    ) -> Result<Vec<NormalTransaction>, Box<dyn Error>>;
+
+    async fn get_erc20_token_transfer_events(
+        &self,
+        option: TokenQueryOption,
+        params: Option<TxListParams>,
+    ) -> Result<Vec<ERC20TokenTransferEvent>, Box<dyn Error>>;
+}
+
+#[async_trait]
+impl TxSource for EtherscanClient {
+    async fn get_transactions(
+        &self,
+        address: &Address,
+        params: Option<TxListParams>,
+    ) -> Result<Vec<NormalTransaction>, Box<dyn Error>> {
+        Ok(EtherscanClient::get_transactions(self, address, params).await?)
+    }
+
+    async fn get_erc20_token_transfer_events(
+        &self,
+        option: TokenQueryOption,
+        params: Option<TxListParams>,
+    ) -> Result<Vec<ERC20TokenTransferEvent>, Box<dyn Error>> {
+        Ok(EtherscanClient::get_erc20_token_transfer_events(self, option, params).await?)
+    }
+}
+
 /// Retrieve all normal transactions for the given address using the provided [`EtherscanClient`].
-pub async fn fetch_transactions(
-    client: &EtherscanClient,
+pub async fn fetch_transactions<C>(
+    client: &C,
     address: Address,
-) -> Result<Vec<Transaction>, Box<dyn Error>> {
-    let txs = client.get_transactions(&address, None).await?;
-    let events = client
-        .get_erc20_token_transfer_events(TokenQueryOption::ByAddress(address), None)
-        .await?;
-    let mut transfers = group_transfers(events);
+) -> Result<Vec<Transaction>, Box<dyn Error>>
+where
+    C: TxSource + Sync,
+{
+    let mut page = 1u64;
+    let mut txs = Vec::new();
+    loop {
+        let params = TxListParams {
+            page,
+            offset: 100,
+            ..Default::default()
+        };
+        let mut batch = client.get_transactions(&address, Some(params)).await?;
+        if batch.is_empty() {
+            break;
+        }
+        txs.append(&mut batch);
+        page += 1;
+    }
+
+    page = 1;
+    let mut events_all = Vec::new();
+    loop {
+        let params = TxListParams {
+            page,
+            offset: 100,
+            ..Default::default()
+        };
+        let mut ev = client
+            .get_erc20_token_transfer_events(TokenQueryOption::ByAddress(address), Some(params))
+            .await?;
+        if ev.is_empty() {
+            break;
+        }
+        events_all.append(&mut ev);
+        page += 1;
+    }
+    let mut transfers = group_transfers(events_all);
     let mut result = Vec::new();
 
     for tx in txs {
@@ -235,7 +304,84 @@ pub async fn fetch_transactions(
 mod tests {
     use super::*;
 
+    use ethers::etherscan::account::GenesisOption;
     use ethers::etherscan::Client as EtherscanClient;
+    use ethers::types::{BlockNumber, Bytes};
+
+    struct MockClient {
+        tx_pages: Vec<Vec<NormalTransaction>>,
+        event_pages: Vec<Vec<ERC20TokenTransferEvent>>,
+    }
+
+    #[async_trait]
+    impl TxSource for MockClient {
+        async fn get_transactions(
+            &self,
+            _address: &Address,
+            params: Option<TxListParams>,
+        ) -> Result<Vec<NormalTransaction>, Box<dyn Error>> {
+            let page = params.map(|p| p.page).unwrap_or(1) as usize;
+            Ok(self.tx_pages.get(page - 1).cloned().unwrap_or_default())
+        }
+
+        async fn get_erc20_token_transfer_events(
+            &self,
+            _option: TokenQueryOption,
+            params: Option<TxListParams>,
+        ) -> Result<Vec<ERC20TokenTransferEvent>, Box<dyn Error>> {
+            let page = params.map(|p| p.page).unwrap_or(1) as usize;
+            Ok(self.event_pages.get(page - 1).cloned().unwrap_or_default())
+        }
+    }
+
+    fn make_tx(hash: H256) -> NormalTransaction {
+        NormalTransaction {
+            is_error: "0".to_string(),
+            block_number: BlockNumber::Number(1u64.into()),
+            time_stamp: "1".to_string(),
+            hash: GenesisOption::Some(hash),
+            nonce: None,
+            block_hash: None,
+            transaction_index: None,
+            from: GenesisOption::Some(Address::zero()),
+            to: Some(Address::zero()),
+            value: U256::zero(),
+            gas: U256::zero(),
+            gas_price: None,
+            tx_receipt_status: "1".to_string(),
+            input: Bytes::new(),
+            contract_address: None,
+            gas_used: U256::zero(),
+            cumulative_gas_used: U256::zero(),
+            confirmations: 0,
+            method_id: None,
+            function_name: None,
+        }
+    }
+
+    fn make_event(hash: H256) -> ERC20TokenTransferEvent {
+        ERC20TokenTransferEvent {
+            block_number: BlockNumber::Number(1u64.into()),
+            time_stamp: "1".to_string(),
+            hash,
+            nonce: U256::zero(),
+            block_hash: H256::zero(),
+            from: Address::zero(),
+            contract_address: Address::zero(),
+            to: Some(Address::zero()),
+            value: U256::one(),
+            token_name: "T".to_string(),
+            token_symbol: "T".to_string(),
+            token_decimal: "18".to_string(),
+            transaction_index: 0,
+            gas: U256::zero(),
+            gas_price: None,
+            gas_used: U256::zero(),
+            cumulative_gas_used: U256::zero(),
+            input: String::new(),
+            confirmations: 0,
+        }
+    }
 
     #[test]
     fn transaction_with_transfer() {
@@ -316,6 +462,37 @@ mod tests {
 
         let res = fetch_transactions(&client, Address::zero()).await;
         assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn fetch_transactions_paginates() {
+        let tx1 = make_tx(H256::from_low_u64_be(1));
+        let tx2 = make_tx(H256::from_low_u64_be(2));
+        let mock = MockClient {
+            tx_pages: vec![vec![tx1], vec![tx2]],
+            event_pages: vec![],
+        };
+
+        let res = fetch_transactions(&mock, Address::zero()).await.unwrap();
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0].hash, H256::from_low_u64_be(1));
+        assert_eq!(res[1].hash, H256::from_low_u64_be(2));
+    }
+
+    #[tokio::test]
+    async fn fetch_transactions_paginates_events() {
+        let hash = H256::from_low_u64_be(1);
+        let tx = make_tx(hash);
+        let ev1 = make_event(hash);
+        let mut ev2 = make_event(hash);
+        ev2.value = U256::from(2u64);
+        let mock = MockClient {
+            tx_pages: vec![vec![tx]],
+            event_pages: vec![vec![ev1], vec![ev2]],
+        };
+
+        let res = fetch_transactions(&mock, Address::zero()).await.unwrap();
+        assert_eq!(res[0].transfers.len(), 2);
     }
     #[test]
     fn config_loads_toml_and_yaml() {

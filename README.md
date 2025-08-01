@@ -15,6 +15,8 @@ cargo run -p arb-gnucash-importer --bin backend
 ```
 
 The output JSON contains normal transactions along with any ERC-20 token transfers.
+Transactions are fetched from the Etherscan API in pages of 100 items until no further
+results are returned.
 
 ## Configuration
 
