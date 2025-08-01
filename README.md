@@ -53,3 +53,5 @@ You can provide a mapping of addresses to transaction categories using the `--ca
 0x2222222222222222222222222222222222222222: Withdrawal
 ```
 See [examples/categories.sample.toml](examples/categories.sample.toml) for a TOML example.
+
+You can also dump all detected ERC-20 token transfers by specifying `--transfers-output <PATH>` when running the backend. This writes a CSV file listing every transfer for debugging purposes.

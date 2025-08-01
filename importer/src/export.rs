@@ -109,11 +109,39 @@ pub fn write_csv(path: &Path, txs: &[Split]) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Write all ERC-20 token transfers in `txs` to `path` as CSV for debugging
+pub fn write_transfers_csv(
+    path: &Path,
+    txs: &[blockchain::Transaction],
+) -> Result<(), Box<dyn Error>> {
+    let file = File::create(path)?;
+    let mut wtr = Writer::from_writer(file);
+    wtr.write_record(["Transaction ID", "Token", "From", "To", "Amount"])?;
+    for tx in txs {
+        for tr in &tx.transfers {
+            let symbol = tokens::get_symbol(&tr.token_contract).unwrap_or(tr.token_symbol.as_str());
+            let decimals = tr.token_decimal.parse::<u32>().unwrap_or(18);
+            let amount = format_units(tr.value, decimals).unwrap_or_else(|_| "0".to_string());
+            wtr.write_record([
+                format!("{:#x}", tx.hash),
+                symbol.to_string(),
+                format!("{:#x}", tr.from),
+                tr.to.map(|a| format!("{:#x}", a)).unwrap_or_default(),
+                amount,
+            ])?;
+        }
+    }
+    wtr.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::blockchain::{Erc20Transfer, Transaction as ChainTx};
     use ethers::types::{H256, U256};
+    use std::env;
+    use std::fs;
     use std::str::FromStr;
 
     #[test]
@@ -150,5 +178,36 @@ mod tests {
         assert_eq!(res[1].commodity, "USDC");
         assert!(res[1].amount < 0.0);
         assert_eq!(res[0].account, "Trade");
+    }
+
+    #[test]
+    fn write_transfers_csv_creates_file() {
+        let transfer = Erc20Transfer {
+            token_contract: Address::from_str("0xff970a61a04b1ca14834a43f5de4533ebddb5cc8")
+                .unwrap(),
+            from: Address::zero(),
+            to: Some(Address::zero()),
+            value: U256::from(1u64),
+            token_name: "TEST".to_string(),
+            token_symbol: "TST".to_string(),
+            token_decimal: "18".to_string(),
+        };
+
+        let chain_tx = ChainTx {
+            hash: H256::zero(),
+            block_number: 1,
+            timestamp: 0,
+            from: Address::zero(),
+            to: Some(Address::zero()),
+            value: U256::zero(),
+            category: None,
+            description: None,
+            transfers: vec![transfer],
+        };
+
+        let path = env::temp_dir().join("transfers_test.csv");
+        write_transfers_csv(&path, &[chain_tx]).unwrap();
+        assert!(path.exists());
+        let _ = fs::remove_file(path);
     }
 }
