@@ -11,6 +11,7 @@ use crate::{blockchain, tokens};
 /// A single split in a transaction for GnuCash CSV exports
 #[derive(Debug)]
 pub struct Split {
+    pub id: String,
     pub date: NaiveDate,
     pub description: String,
     pub account: String,
@@ -52,6 +53,7 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
                 amount = -amount;
             }
             res.push(Split {
+                id: format!("{:#x}", tx.hash),
                 date,
                 description: description.clone(),
                 account: account.clone(),
@@ -68,6 +70,7 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
                     amount = -amount;
                 }
                 res.push(Split {
+                    id: format!("{:#x}", tx.hash),
                     date,
                     description: description.clone(),
                     account: account.clone(),
@@ -85,15 +88,16 @@ pub fn write_csv(path: &Path, txs: &[Split]) -> Result<(), Box<dyn Error>> {
     let file = File::create(path)?;
     let mut wtr = Writer::from_writer(file);
     wtr.write_record([
+        "Transaction ID",
         "Date",
         "Description",
         "Account",
         "Commodity",
-        "Value",
         "Amount",
     ])?;
     for tx in txs {
         wtr.write_record([
+            tx.id.clone(),
             tx.date.to_string(),
             tx.description.clone(),
             tx.account.clone(),
@@ -138,6 +142,9 @@ mod tests {
         };
         let res = from_chain(Address::repeat_byte(0x11), &[chain_tx]);
         assert_eq!(res.len(), 2);
+        let expected_id = format!("{:#x}", H256::zero());
+        assert_eq!(res[0].id, expected_id);
+        assert_eq!(res[1].id, expected_id);
         assert_eq!(res[0].commodity, "ETH");
         assert!(res[0].amount < 0.0);
         assert_eq!(res[1].commodity, "USDC");
