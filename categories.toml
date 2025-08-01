@@ -1,0 +1,43 @@
+["0x9dda6ef3d919c9bc8885d5560999a3640431e8e6"]
+category = "Swap"
+description = "Swap"
+
+["0x63dfa7c09dc2ff4030d6b8dc2ce6262bf898c8a4"]
+category = "Swap"
+description = "AAVE"
+
+["0x794a61358d6845594f94dc1db02a252b5b4814ad"]
+category = "Swap"
+description = "AAVE"
+
+["0xf3c3f14dd7bdb7e03e6ebc3bc5ffc6d66de12251"]
+category = "Swap"
+description = "AAVE"
+
+["0x5283beced7adf6d003225c13896e536f2d4264ff"]
+category = "Swap"
+description = "AAVE"
+
+["0x5760e34c4003752329bc77790b1de44c2799f8c3"]
+category = "Swap"
+description = "AAVE"
+
+["0x82af49447d8a07e3bd95bd0d56f35241523fbab1"]
+category = "Swap"
+description = "AAVE"
+
+["0x900173a66dbd345006c51fa35fa3ab760fcd843b"]
+category = "Trade"
+description = "GMX"
+
+["0x5ac4e27341e4cccb3e5fd62f9e62db2adf43dd57"]
+category = "Trade"
+description = "GMX"
+
+["0x69c527fc77291722b52649e45c838e41be8bf5d5"]
+category = "Trade"
+description = "GMX"
+
+["0x8704ee9ab8622bbc25410c7d4717ed51f776c7f6"]
+category = "Airdrop"
+description = "Airdrop"

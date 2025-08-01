@@ -39,7 +39,11 @@ pub fn from_chain(address: Address, txs: &[blockchain::Transaction]) -> Vec<Spli
         } else {
             "withdrawal".to_string()
         };
-        let description = tx.category.clone().unwrap_or_else(|| default_desc.clone());
+        let description = tx
+            .description
+            .clone()
+            .or_else(|| tx.category.clone())
+            .unwrap_or_else(|| default_desc.clone());
         let account = tx.category.clone().unwrap_or_else(|| "Unknown".to_string());
 
         if eth_amount != 0.0 {
@@ -129,14 +133,15 @@ mod tests {
             to: Some(Address::repeat_byte(0x22)),
             value: U256::from(10u64.pow(18)),
             category: Some("Trade".to_string()),
+            description: None,
             transfers: vec![transfer],
         };
         let res = from_chain(Address::repeat_byte(0x11), &[chain_tx]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0].commodity, "ETH");
-        assert!(res[0].value < 0.0);
+        assert!(res[0].amount < 0.0);
         assert_eq!(res[1].commodity, "USDC");
-        assert!(res[1].value < 0.0);
+        assert!(res[1].amount < 0.0);
         assert_eq!(res[0].account, "Trade");
     }
 }

@@ -1,3 +1,8 @@
 # Mapping of addresses to transaction categories
-"0x1111111111111111111111111111111111111111" = "Deposit"
-"0x2222222222222222222222222222222222222222" = "Withdrawal"
+["0x1111111111111111111111111111111111111111"]
+category = "Deposit"
+description = "Sample deposit"
+
+["0x2222222222222222222222222222222222222222"]
+category = "Withdrawal"
+description = "Sample withdrawal"
