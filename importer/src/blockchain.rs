@@ -76,6 +76,8 @@ pub struct Transaction {
     pub value: U256,
     /// Optional category for the transaction
     pub category: Option<String>,
+    /// Optional description for the transaction
+    pub description: Option<String>,
     /// ERC-20 token transfers associated with this transaction
     pub transfers: Vec<Erc20Transfer>,
 }
@@ -92,25 +94,60 @@ pub struct Erc20Transfer {
     pub token_decimal: String,
 }
 
-/// Mapping from addresses to transaction categories
+/// Category information associated with an address
+#[derive(Clone, Debug, Deserialize)]
+pub struct CategoryEntry {
+    pub category: String,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Mapping from addresses to transaction categories and descriptions
 #[derive(Debug, Deserialize)]
-pub struct Categories(pub HashMap<Address, String>);
+pub struct Categories(pub HashMap<Address, CategoryEntry>);
 
 impl Categories {
     /// Load categories from the given file path. The format is inferred from the
     /// extension and may be TOML, JSON, or YAML.
     pub fn load(path: &Path) -> Result<Self, Box<dyn Error>> {
         let contents = fs::read_to_string(path)?;
-        let map: HashMap<Address, String> = match path.extension().and_then(|e| e.to_str()) {
-            Some("json") => serde_json::from_str(&contents)?,
-            Some("toml") => toml::from_str(&contents)?,
-            _ => serde_yaml::from_str(&contents)?,
+        // first try parsing the new structure with descriptions
+        let map: Result<HashMap<Address, CategoryEntry>, Box<dyn Error>> =
+            match path.extension().and_then(|e| e.to_str()) {
+                Some("json") => Ok(serde_json::from_str(&contents)?),
+                Some("toml") => Ok(toml::from_str(&contents)?),
+                _ => Ok(serde_yaml::from_str(&contents)?),
+            };
+
+        let map = match map {
+            Ok(m) => m,
+            Err(_) => {
+                // fall back to legacy format mapping address -> String
+                let legacy: HashMap<Address, String> =
+                    match path.extension().and_then(|e| e.to_str()) {
+                        Some("json") => serde_json::from_str(&contents)?,
+                        Some("toml") => toml::from_str(&contents)?,
+                        _ => serde_yaml::from_str(&contents)?,
+                    };
+                legacy
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            CategoryEntry {
+                                category: v,
+                                description: None,
+                            },
+                        )
+                    })
+                    .collect()
+            }
         };
         Ok(Self(map))
     }
 
-    fn category_for(&self, addr: &Address) -> Option<String> {
-        self.0.get(addr).cloned()
+    fn entry_for(&self, addr: &Address) -> Option<&CategoryEntry> {
+        self.0.get(addr)
     }
 }
 
@@ -136,12 +173,16 @@ fn group_transfers(events: Vec<ERC20TokenTransferEvent>) -> HashMap<H256, Vec<Er
 pub fn apply_categories(txs: &mut [Transaction], categories: &Categories) {
     for tx in txs {
         if let Some(to) = tx.to {
-            if let Some(cat) = categories.category_for(&to) {
-                tx.category = Some(cat);
+            if let Some(entry) = categories.entry_for(&to) {
+                tx.category = Some(entry.category.clone());
+                tx.description = entry.description.clone();
                 continue;
             }
         }
-        tx.category = categories.category_for(&tx.from);
+        if let Some(entry) = categories.entry_for(&tx.from) {
+            tx.category = Some(entry.category.clone());
+            tx.description = entry.description.clone();
+        }
     }
 }
 
@@ -182,6 +223,7 @@ pub async fn fetch_transactions(
             to: tx.to,
             value: tx.value,
             category: None,
+            description: None,
             transfers: transfers.remove(&hash).unwrap_or_default(),
         });
     }
@@ -215,6 +257,7 @@ mod tests {
             to: None,
             value: U256::zero(),
             category: None,
+            description: None,
             transfers: vec![transfer.clone()],
         };
 
@@ -232,17 +275,31 @@ mod tests {
             to: Some(Address::repeat_byte(0x22)),
             value: U256::zero(),
             category: None,
+            description: None,
             transfers: Vec::new(),
         }];
 
         let mut map = HashMap::new();
-        map.insert(Address::repeat_byte(0x11), "Deposit".to_string());
-        map.insert(Address::repeat_byte(0x22), "Withdrawal".to_string());
+        map.insert(
+            Address::repeat_byte(0x11),
+            CategoryEntry {
+                category: "Deposit".to_string(),
+                description: None,
+            },
+        );
+        map.insert(
+            Address::repeat_byte(0x22),
+            CategoryEntry {
+                category: "Withdrawal".to_string(),
+                description: Some("Foo".to_string()),
+            },
+        );
         let cats = Categories(map);
 
         apply_categories(&mut txs, &cats);
 
         assert_eq!(txs[0].category.as_deref(), Some("Withdrawal"));
+        assert_eq!(txs[0].description.as_deref(), Some("Foo"));
     }
 
     #[tokio::test]
