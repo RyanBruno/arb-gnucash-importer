@@ -3,7 +3,7 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use arb_gnucash_importer::blockchain::{self, apply_categories, Categories, Config};
-use arb_gnucash_importer::export::{self, write_csv};
+use arb_gnucash_importer::export::{self, write_csv, write_transfers_csv};
 use ethers::types::Address;
 
 /// Command line arguments for the backend tool
@@ -21,6 +21,10 @@ struct Args {
     /// Optional config file mapping addresses to transaction categories
     #[arg(long)]
     categories: Option<PathBuf>,
+
+    /// Optional file path to write token transfer details
+    #[arg(long)]
+    transfers_output: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -41,5 +45,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     let gnucash_txs = export::from_chain(address, &txs);
     write_csv(&args.output, &gnucash_txs)?;
+    if let Some(path) = args.transfers_output.as_deref() {
+        write_transfers_csv(path, &txs)?;
+    }
     Ok(())
 }
